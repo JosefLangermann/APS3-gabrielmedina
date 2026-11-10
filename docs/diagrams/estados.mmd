@@ -1,0 +1,36 @@
+stateDiagram-v2
+    [*] --> RASCUNHO
+
+    RASCUNHO --> RECEBIDA : submeter [dadosValidos] / salvarCandidatura()
+    RASCUNHO --> CANCELADA : cancelar [solicitacaoDoAluno] / registrarCancelamento()
+
+    state RECEBIDA {
+        [*] --> AGUARDANDO_COMPETENCIAS
+        AGUARDANDO_COMPETENCIAS : entry / registrarInicioDaColeta()
+        AGUARDANDO_COMPETENCIAS : do / aguardarEventoCompetencias()
+        AGUARDANDO_COMPETENCIAS --> PERFIL_CARREGADO : competenciasDisponiveis [perfilCompleto] / armazenarPerfil()
+        PERFIL_CARREGADO : exit / liberarParaMatch()
+        PERFIL_CARREGADO --> [*]
+    }
+
+    RECEBIDA --> PROCESSANDO : competenciasDisponiveis [perfilCompleto] / publicarSolicitacaoMatch()
+    RECEBIDA --> FALHA_PROCESSAMENTO : competenciasIndisponiveis [tentativasEsgotadas] / registrarFalha()
+
+    PROCESSANDO : entry / registrarInicioDoMatch()
+    PROCESSANDO : do / calcularCompatibilidadeDasVagas()
+    PROCESSANDO : exit / registrarFimDoProcessamento()
+    PROCESSANDO --> PROCESSADA : matchConcluido [existeVagaCompativel] / salvarResultado()
+    PROCESSANDO --> SEM_MATCH : matchConcluido [!existeVagaCompativel] / salvarResultadoVazio()
+    PROCESSANDO --> FALHA_PROCESSAMENTO : erroNoMatch [tentativasEsgotadas] / registrarFalha()
+
+    SEM_MATCH --> RECEBIDA : solicitarNovaAnalise [perfilAtualizado] / reiniciarColeta()
+    PROCESSADA --> CONTRATADA : contratoConfirmado [alunoAceitou && empresaAprovou] / registrarContratacao()
+    PROCESSADA --> EXPIRADA : prazoEncerrado [dataAtual > dataLimite] / arquivarCandidatura()
+
+    SEM_MATCH --> CANCELADA : cancelar [solicitacaoDoAluno] / registrarCancelamento()
+    FALHA_PROCESSAMENTO --> RECEBIDA : reprocessar [falhaRecuperavel] / reenviarEvento()
+    FALHA_PROCESSAMENTO --> CANCELADA : cancelar [solicitacaoDoAluno] / registrarCancelamento()
+
+    CONTRATADA --> [*]
+    EXPIRADA --> [*]
+    CANCELADA --> [*]

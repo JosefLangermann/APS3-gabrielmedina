@@ -1,0 +1,36 @@
+@startuml C4_Containers_Estagios
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Container.puml
+
+LAYOUT_WITH_LEGEND()
+title C4 - Visão de Contêineres | Gestão de Estágios UniSenai
+
+Person(aluno, "Aluno", "Submete candidatura e consulta o andamento.")
+Person(empresa, "Empresa parceira", "Disponibiliza vagas e avalia candidatos compatíveis.")
+Person(coordenador, "Coordenador UniSenai", "Acompanha vagas e processos de estágio.")
+
+System_Boundary(sistema, "Plataforma de Gestão de Estágios") {
+    Container(web, "Frontend Web", "React + TypeScript", "Interface para alunos, empresas e coordenação.")
+    Container(api, "API de Aplicação", "Node.js + Express", "Valida requisições, gerencia candidaturas e consulta seus estados.")
+    Container(competencias, "CompetenciaService", "Node.js", "Obtém o perfil acadêmico e publica as competências do aluno.")
+    Container(match, "MatchService", "Python + FastAPI", "Calcula a compatibilidade entre competências e vagas.")
+    ContainerDb(db, "Banco de Dados", "PostgreSQL", "Armazena alunos, vagas, candidaturas e resultados.")
+    Container(broker, "Message Broker", "RabbitMQ", "Transporta eventos assíncronos do pipeline de candidatura.")
+}
+
+System_Ext(sistemaAcademico, "Sistema Acadêmico", "Fonte institucional de histórico e competências do aluno.")
+
+Rel(aluno, web, "Utiliza", "HTTPS")
+Rel(empresa, web, "Gerencia vagas e consulta candidatos", "HTTPS")
+Rel(coordenador, web, "Acompanha processos", "HTTPS")
+Rel(web, api, "Envia candidatura e consulta status", "REST / JSON / HTTPS")
+Rel(api, db, "Persiste candidatura e consulta status", "SQL / TCP")
+Rel(api, broker, "Publica solicitação de competências", "AMQP 0-9-1")
+Rel(broker, api, "Entrega resultado do match", "AMQP 0-9-1")
+Rel(broker, competencias, "Entrega solicitação de competências", "AMQP 0-9-1")
+Rel(competencias, sistemaAcademico, "Consulta perfil acadêmico", "HTTPS / REST")
+Rel(competencias, broker, "Publica evento de competências disponíveis", "AMQP 0-9-1")
+Rel(broker, match, "Entrega evento de competências disponíveis", "AMQP 0-9-1")
+Rel(match, db, "Consulta vagas ativas", "SQL / TCP")
+Rel(match, broker, "Publica resultado do match", "AMQP 0-9-1")
+
+@enduml

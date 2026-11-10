@@ -1,0 +1,47 @@
+sequenceDiagram
+    autonumber
+    actor Aluno
+    participant API as ApplicationController
+    participant VS as ValidationService
+    participant Repo as CandidaturaRepository
+    participant MQ as RabbitMQ
+    participant CS as CompetenciaService
+    participant Acad as SistemaAcademico
+    participant MS as MatchService
+
+    Aluno->>API: criarCandidatura(CandidaturaRequestDTO)
+    API->>VS: validar(CandidaturaRequestDTO)
+    VS-->>API: ResultadoValidacaoDTO
+
+    alt [!resultadoValido]
+        API-->>Aluno: 422 ErrorResponseDTO
+    else [resultadoValido]
+        API->>Repo: salvar(Candidatura)
+        Repo-->>API: CandidaturaDTO(id, status=RECEBIDA)
+        API->>MQ: publicarSolicitacaoCompetencias(SolicitacaoCompetenciasEvento)
+        MQ-->>API: ConfirmacaoPublicacaoDTO
+        API-->>Aluno: 202 Accepted (CandidaturaStatusDTO)
+
+        Note over MQ,MS: Processamento assíncrono após a resposta HTTP
+        MQ-)CS: consumirSolicitacaoCompetencias(evento)
+        CS->>Acad: consultarPerfilAcademico(alunoId)
+        Acad-->>CS: PerfilCompetenciasDTO
+        CS->>MQ: publicarCompetenciasDisponiveis(CompetenciasDisponiveisEvento)
+        MQ-)MS: consumirCompetenciasDisponiveis(evento)
+        MS->>Repo: buscarVagasAtivas(filtros)
+        Repo-->>MS: List<VagaDTO>
+        loop [para cada vaga ativa]
+            MS->>MS: calcularScore(perfil, vaga)
+        end
+        MS->>MQ: publicarResultadoMatch(ResultadoMatchEvento)
+        MQ-)API: consumirResultadoMatch(evento)
+        API->>Repo: atualizarResultado(candidaturaId, status, resultado)
+        Repo-->>API: CandidaturaDTO atualizado
+    end
+
+    opt [aluno consulta o andamento]
+        Aluno->>API: consultarStatus(candidaturaId)
+        API->>Repo: buscarPorId(candidaturaId)
+        Repo-->>API: CandidaturaStatusDTO
+        API-->>Aluno: 200 OK (CandidaturaStatusDTO)
+    end

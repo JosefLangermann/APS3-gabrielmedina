@@ -1,0 +1,64 @@
+flowchart TD
+    INICIO((Início))
+
+    subgraph L1["Aluno"]
+        A[Preencher formulário de candidatura]
+        B[Enviar POST /candidaturas]
+        A --> B
+    end
+
+    subgraph L2["API de Aplicação"]
+        C[Validar dados recebidos]
+        D{dadosValidos?}
+        E[Persistir candidatura como RECEBIDA]
+        F[Registrar auditoria da solicitação]
+        G[Retornar 202 Accepted com CandidaturaStatusDTO]
+        H[Retornar 422 com ErrorResponseDTO]
+        I[Atualizar candidatura com resultado do match]
+        J[Disponibilizar status atualizado para consulta]
+        B --> C --> D
+        D -->|dadosValidos == false| H
+        D -->|dadosValidos == true| E
+    end
+
+    subgraph L3["Mensageria - RabbitMQ"]
+        FORK["╠ FORK ╣"]
+        PUBLICAR[Publicar SolicitacaoCompetenciasEvento]
+        JOIN["╠ JOIN ╣"]
+        ROTA1[Entregar solicitação ao CompetenciaService]
+        ROTA2[Entregar resultado ao consumidor da API]
+        FORK --> PUBLICAR --> JOIN
+        FORK --> F --> JOIN
+        JOIN --> G
+        PUBLICAR --> ROTA1
+    end
+
+    subgraph L4["Serviços de domínio e sistema externo"]
+        K[CompetenciaService consome solicitação]
+        L[Consultar perfil no Sistema Acadêmico]
+        M[Publicar CompetenciasDisponiveisEvento]
+        N[MatchService consome competências]
+        O[Buscar vagas ativas]
+        P[Calcular score para cada vaga]
+        Q{perfilCompleto?}
+        R[Publicar ResultadoMatchEvento]
+        S[Registrar falha após esgotar tentativas]
+        K --> L --> Q
+        Q -->|perfilCompleto == true| M --> N --> O --> P --> R
+        Q -->|perfilCompleto == false| S
+    end
+
+    INICIO --> A
+    E --> FORK
+    ROTA1 --> K
+    R --> ROTA2
+    ROTA2 --> I
+    I --> J
+
+    G --> FIM((Solicitação aceita))
+    H --> FIM_ERRO((Solicitação rejeitada))
+    J --> FIM_ASYNC((Processamento concluído))
+    S --> FIM_FALHA((Falha registrada))
+
+    classDef forkjoin fill:#222,stroke:#111,color:#fff,font-weight:bold;
+    class FORK,JOIN forkjoin;
